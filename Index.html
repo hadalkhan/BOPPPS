@@ -1,0 +1,322 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>BOPPPS Clock Animation with Class Selection and Logo</title>
+<style>
+  body {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    background: #1a1a2e;
+    color: #eee;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100vh;
+    margin: 0;
+    padding: 20px;
+  }
+  canvas {
+    background: #16213e;
+    border-radius: 50%;
+    box-shadow: 0 0 20px #0f3460;
+  }
+  #currentPhase {
+    margin-top: 10px;
+    font-size: 1.5rem;
+    font-weight: bold;
+    color: #e94560;
+    text-align: center;
+    min-height: 1.8em;
+  }
+  #realTime {
+    margin-top: 5px;
+    font-size: 1.1rem;
+    font-weight: normal;
+    color: #90caf9;
+    text-align: center;
+    min-height: 1.5em;
+  }
+  button {
+    margin-top: 15px;
+    font-size: 1.2rem;
+    padding: 10px 30px;
+    background-color: #0f3460;
+    border: none;
+    border-radius: 8px;
+    color: #eee;
+    cursor: pointer;
+    transition: background-color 0.3s ease;
+    box-shadow: 0 0 8px #0f3460;
+  }
+  button:hover {
+    background-color: #1a71d9;
+    box-shadow: 0 0 16px #1a71d9;
+  }
+  select {
+    margin-bottom: 20px;
+    padding: 10px;
+    font-size: 1rem;
+    border-radius: 5px;
+    border: 1px solid #0f3460;
+    background-color: #16213e;
+    color: #eee;
+  }
+</style>
+</head>
+<body>
+
+<select id="classSelector">
+  <option value="35">35 Minutes Class</option>
+  <option value="70">70 Minutes Class</option>
+</select>
+
+<canvas id="clock" width="400" height="400"></canvas>
+<div id="currentPhase">Select a class duration and press Start to begin the BOPPPS Cycle</div>
+<div id="realTime"></div>
+<button id="startResetBtn">Start</button>
+
+<script>
+  const canvas = document.getElementById('clock');
+  const ctx = canvas.getContext('2d');
+  const centerX = canvas.width / 2;
+  const centerY = canvas.height / 2;
+  const radius = 180;
+  const handLength = 140;
+  const startAngleOffset = -Math.PI / 2; // Starting at top (12 o'clock)
+
+  // Load your logo image here - replace the src with your logo's path or URL
+  const logo = new Image();
+  logo.src = 'https://thecityschool.edu.pk/wp-content/themes/the-city-school/images/logo.svg'; // Example logo - replace with your own
+
+  // BOPPPS elements for 35 minutes class
+  const segments35 = [
+    { label: 'Bridge-in', time: 5, color: '#e94560' },
+    { label: 'Pre-Assessment', time: 5, color: '#0f3460' },
+    { label: 'Participatory Learning', time: 20, color: '#53354a' },
+    { label: 'Post-Assessment', time: 5, color: '#0f3460' },
+    { label: 'Summary', time: 5, color: '#e94560' }
+  ];
+
+  // BOPPPS elements for 70 minutes class
+  const segments70 = [
+    { label: 'Bridge-in', time: 10, color: '#e94560' },
+    { label: 'Pre-Assessment', time: 10, color: '#0f3460' },
+    { label: 'Participatory Learning', time: 40, color: '#53354a' },
+    { label: 'Post-Assessment', time: 10, color: '#0f3460' },
+    { label: 'Summary', time: 10, color: '#e94560' }
+  ];
+
+  let segments = segments35; // Default to 35 minutes
+  let totalTime = 0;
+  let animationId = null;
+  let startTime = null;
+  let running = false;
+
+  const phaseText = document.getElementById('currentPhase');
+  const realTimeText = document.getElementById('realTime');
+  const startResetBtn = document.getElementById('startResetBtn');
+
+  // Helper to format time for real-time clock display
+  function formatTime(date) {
+    const hrs = date.getHours().toString().padStart(2,'0');
+    const mins = date.getMinutes().toString().padStart(2,'0');
+    const secs = date.getSeconds().toString().padStart(2,'0');
+    return `${hrs}:${mins}:${secs}`;
+  }
+
+  // Update real time below the clock every second
+  function updateRealTime() {
+    const now = new Date();
+    realTimeText.textContent = `Current Time: ${formatTime(now)}`;
+  }
+
+  setInterval(updateRealTime, 1000);
+  updateRealTime();
+
+  // Convert radians to degrees helper
+  function radToDeg(rad) {
+    return rad * 180 / Math.PI;
+  }
+
+  // Draw clock face: circle, hour marks, and start/end markers
+  function drawClockFace() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.save();
+    ctx.translate(centerX, centerY);
+
+    // Outer circle
+    ctx.beginPath();
+    ctx.arc(0, 0, radius, 0, 2 * Math.PI);
+    ctx.fillStyle = '#0f3460';
+    ctx.fill();
+
+    // Draw segments as colored arcs
+    let cumulativeAngle = 0;
+    segments.forEach(seg => {
+      const angle = (seg.time / totalTime) * 2 * Math.PI;
+      ctx.beginPath();
+      ctx.moveTo(0, 0);
+      ctx.fillStyle = seg.color;
+      ctx.strokeStyle = 'black';
+      ctx.lineWidth = 2;
+      ctx.arc(0, 0, radius, cumulativeAngle + startAngleOffset, cumulativeAngle + angle + startAngleOffset);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+      cumulativeAngle += angle;
+    });
+
+    // Draw segment labels radially
+    ctx.fillStyle = '#eee';
+    ctx.font = 'bold 14px Arial';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+
+    cumulativeAngle = 0;
+    segments.forEach(seg => {
+      const angle = (seg.time / totalTime) * 2 * Math.PI;
+      const labelRadius = radius * 0.7;
+      const x = labelRadius * Math.cos(cumulativeAngle + angle / 2 + startAngleOffset);
+      const y = labelRadius * Math.sin(cumulativeAngle + angle / 2 + startAngleOffset);
+      ctx.save();
+      ctx.translate(x, y);
+      ctx.rotate(cumulativeAngle + angle / 2 + startAngleOffset + Math.PI / 2);
+      ctx.fillText(seg.label, 0, 0);
+      ctx.restore();
+      cumulativeAngle += angle;
+    });
+
+    // Draw hour marks around the edge
+    for (let i = 0; i < 60; i++) {
+      const angle = (i * (2 * Math.PI / 60)) + startAngleOffset;
+      const innerRadius = radius - (i % 5 === 0 ? 15 : 7);
+      const outerRadius = radius;
+      ctx.beginPath();
+      ctx.strokeStyle = '#eee';
+      ctx.lineWidth = i % 5 === 0 ? 3 : 1;
+      ctx.moveTo(innerRadius * Math.cos(angle), innerRadius * Math.sin(angle));
+      ctx.lineTo(outerRadius * Math.cos(angle), outerRadius * Math.sin(angle));
+      ctx.stroke();
+    }
+
+    // Draw center circle
+    ctx.beginPath();
+    ctx.arc(0, 0, 40, 0, 2 * Math.PI);  // circle background for logo
+    ctx.fillStyle = '#16213e';
+    ctx.shadowColor = '#000000';
+    ctx.shadowBlur = 15;
+    ctx.fill();
+    ctx.shadowBlur = 0;
+
+    // Draw logo image in center if loaded
+    if (logo.complete && logo.naturalWidth !== 0) {
+      const logoSize = 100; // size of logo
+      ctx.drawImage(logo, -logoSize / 2, -logoSize / 2, logoSize, logoSize);
+    }
+
+    ctx.restore();
+  }
+
+  // Draw the rotating clock hand
+  function drawHand(angle) {
+    ctx.save();
+    ctx.translate(centerX, centerY);
+    ctx.rotate(angle + startAngleOffset);
+    ctx.beginPath();
+    ctx.moveTo(0, 8);
+    ctx.lineTo(handLength, 0);
+    ctx.lineTo(0, -8);
+    ctx.fillStyle = '#ffdb58';
+    ctx.shadowColor = '#ffdb58';
+    ctx.shadowBlur = 15;
+    ctx.fill();
+    ctx.shadowBlur = 0;
+    ctx.restore();
+  }
+
+  // Given elapsed time in minutes, find the current segment index
+  function findSegmentIndex(elapsed) {
+    let accumulated = 0;
+    for (let i = 0; i < segments.length; i++) {
+      accumulated += segments[i].time;
+      if (elapsed < accumulated) {
+        return i;
+      }
+    }
+    return 0; // fallback to first
+  }
+
+  // Animate the clock continuously
+  function animate(timestamp) {
+    if (!startTime) startTime = timestamp;
+    const elapsedMs = timestamp - startTime;
+    const elapsedMinutes = (elapsedMs / 60000) % totalTime;
+    const angle = (elapsedMinutes / totalTime) * 2 * Math.PI;
+
+    const currentSegmentIndex = findSegmentIndex(elapsedMinutes);
+    const currentSegment = segments[currentSegmentIndex];
+
+    drawClockFace();
+    drawHand(angle);
+
+    let elapsedInSegment = elapsedMinutes;
+    if (currentSegmentIndex > 0) {
+      const prevTimes = segments.slice(0, currentSegmentIndex).reduce((sum, seg) => sum + seg.time, 0);
+      elapsedInSegment = elapsedMinutes - prevTimes;
+    }
+    const remaining = (currentSegment.time - elapsedInSegment).toFixed(2);
+
+    phaseText.textContent = `Current Phase: ${currentSegment.label} | Time Left: ${remaining} min`;
+
+    animationId = requestAnimationFrame(animate);
+  }
+
+  function startAnimation() {
+    if (!running) {
+      startTime = null;
+      animationId = requestAnimationFrame(animate);
+      running = true;
+      startResetBtn.textContent = 'Reset';
+    }
+  }
+
+  function stopAnimation() {
+    if (animationId) {
+      cancelAnimationFrame(animationId);
+      animationId = null;
+    }
+    running = false;
+  }
+
+  // When class selection changes, stop animation, update segments, redraw clock and reset texts
+  document.getElementById('classSelector').addEventListener('change', () => {
+    stopAnimation();
+    updateSegments();
+  });
+
+  startResetBtn.addEventListener('click', () => {
+    if (!running) {
+      startAnimation();
+    } else {
+      stopAnimation();
+      startAnimation();
+    }
+  });
+
+  // Update segments and redraw clock face according to selection
+  function updateSegments() {
+    const selectedClass = document.getElementById('classSelector').value;
+    segments = selectedClass === '70' ? segments70 : segments35;
+    totalTime = segments.reduce((sum, seg) => sum + seg.time, 0);
+    drawClockFace();
+    phaseText.textContent = "Select a class duration and press Start to begin the BOPPPS Cycle";
+  }
+
+  updateSegments();
+</script>
+
+</body>
+</html>
+
